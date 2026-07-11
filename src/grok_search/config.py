@@ -5,7 +5,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 class Config:
     _instance = None
-    _SETUP_HINT = "Run 'grok-search config import-env FILE' or export GROK_API_URL and GROK_API_KEY."
+    _SETUP_HINT = "Run 'search config import-env FILE' or export GROK_API_URL and GROK_API_KEY."
     _DEFAULT_MODEL = "grok-4.20-beta"
     _DEFAULT_GUDA_BASE_URL = "https://code.guda.studio"
 

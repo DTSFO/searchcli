@@ -9,11 +9,11 @@ This release is CLI-only. The MCP server, FastMCP dependency, and MCP installati
 Python 3.10+ is required.
 
 ```bash
-uvx --from git+https://github.com/GuDaStudio/GrokSearch@grok-with-tavily grok-search --help
+uvx --from git+https://github.com/GuDaStudio/GrokSearch@grok-with-tavily search --help
 
 # local development
 python -m pip install -e .
-grok-search --version
+search --version
 ```
 
 ## Configure
@@ -31,8 +31,8 @@ export TAVILY_API_KEY="your-tavily-key"
 GuDa users may configure only `GUDA_API_KEY`. You may also import an env-style file; `TAVILY_URL` is normalized to `TAVILY_API_URL`. A Tavily Hikari MCP endpoint such as `https://<origin>/mcp` is automatically converted to its REST-compatible base `https://<origin>/api/tavily`:
 
 ```bash
-grok-search config import-env /path/to/credentials.env
-grok-search config show --check
+search config import-env /path/to/credentials.env
+search config show --check
 ```
 
 The managed credential file is user-readable only. Keys are never stored in search/planning sessions and are masked in diagnostics.
@@ -46,19 +46,19 @@ Exit codes: `0` success, `1` internal, `2` usage, `3` configuration, `4` not fou
 ## Commands
 
 ```bash
-grok-search search "latest Python release" --extra-sources 3
-grok-search sources get SESSION_ID
-grok-search fetch https://example.com
-grok-search map https://docs.example.com --max-depth 2 --limit 100
-grok-search config show --check
-grok-search model list
-grok-search model current
-grok-search model set MODEL_ID
-grok-search session list
-grok-search session show SESSION_ID --kind planning
+search search "latest Python release" --extra-sources 3
+search sources get SESSION_ID
+search fetch https://example.com
+search map https://docs.example.com --max-depth 2 --limit 100
+search config show --check
+search model list
+search model current
+search model set MODEL_ID
+search session list
+search session show SESSION_ID --kind planning
 ```
 
-Use `grok-search COMMAND --help` for the full scalar argument contract.
+Use `search COMMAND --help` for the full scalar argument contract.
 
 ## Agent planning protocol
 
@@ -73,9 +73,9 @@ intent → complexity → sub-query → search-term → tool-mapping → executi
 ## Claude Code integration
 
 ```bash
-grok-search integrations claude status
-grok-search integrations claude disable-builtins
-grok-search integrations claude enable-builtins
+search integrations claude status
+search integrations claude disable-builtins
+search integrations claude enable-builtins
 ```
 
 Only `WebFetch` and `WebSearch` entries in the current Git project's `.claude/settings.json` are managed.

@@ -1,4 +1,6 @@
 import json
+import tomllib
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -12,6 +14,13 @@ def test_version_matches_package_metadata():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert result.stdout.strip() == package_version()
+
+
+def test_console_script_is_search_only():
+    project = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
+    scripts = project["project"]["scripts"]
+    assert "search" in scripts
+    assert "grok-search" not in scripts
 
 
 def test_model_current_is_json(monkeypatch, tmp_path):
