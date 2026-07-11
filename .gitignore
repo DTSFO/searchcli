@@ -1,1 +1,22 @@
 .ace-tool/
+
+# Local AI/Trellis workspace metadata
+.trellis/
+.agents/
+.codex/
+AGENTS.md
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Build and runtime output
+build/
+dist/
+logs/
