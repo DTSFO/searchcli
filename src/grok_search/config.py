@@ -160,7 +160,16 @@ class Config:
         url = os.getenv("TAVILY_API_URL")
         if not url and self.guda_api_key:
             return f"{self.guda_base_url}/tavily"
-        return url or "https://api.tavily.com"
+        return self._normalize_tavily_url(url or "https://api.tavily.com")
+
+    @staticmethod
+    def _normalize_tavily_url(url: str) -> str:
+        """Convert a Tavily Hikari MCP endpoint to its REST-compatible base."""
+        parts = urlsplit(url.strip())
+        path = parts.path.rstrip("/")
+        if path.endswith("/mcp"):
+            path = f"{path[:-4]}/api/tavily"
+        return urlunsplit((parts.scheme, parts.netloc, path or "", parts.query, parts.fragment)).rstrip("/")
 
     @property
     def tavily_api_key(self) -> str | None:

@@ -37,7 +37,7 @@ GuDa 用户只需：
 export GUDA_API_KEY="your-guda-key"
 ```
 
-也可导入 env-style 文件。CLI 会复制到用户配置目录并限制为当前用户读写；`TAVILY_URL` 会自动规范化为 `TAVILY_API_URL`：
+也可导入 env-style 文件。CLI 会复制到用户配置目录并限制为当前用户读写；`TAVILY_URL` 会自动规范化为 `TAVILY_API_URL`。如果输入的是 Tavily Hikari MCP 地址 `https://<origin>/mcp`，运行时会自动使用其 REST 兼容地址 `https://<origin>/api/tavily`：
 
 ```bash
 grok-search config import-env /path/to/credentials.env

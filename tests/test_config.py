@@ -15,12 +15,18 @@ def fresh_config(tmp_path, monkeypatch):
 
 def test_import_env_maps_tavily_alias_and_masks_keys(tmp_path, monkeypatch):
     source = tmp_path / "input.env"
-    source.write_text("GROK_API_URL=https://example.test/v1\nGROK_API_KEY=secret-value\nTAVILY_URL=https://tavily.test\nTAVILY_API_KEY=other-secret\n", encoding="utf-8")
+    source.write_text("GROK_API_URL=https://example.test/v1\nGROK_API_KEY=secret-value\nTAVILY_URL=https://tavily.test/mcp\nTAVILY_API_KEY=other-secret\n", encoding="utf-8")
     settings = fresh_config(tmp_path / "config-home", monkeypatch)
     result = settings.import_env_file(source)
     assert "TAVILY_API_URL" in result["variables"]
     assert "TAVILY_URL" not in result["variables"]
-    assert settings.tavily_api_url == "https://tavily.test"
+    assert settings.tavily_api_url == "https://tavily.test/api/tavily"
     assert "secret-value" not in str(settings.get_config_info())
     assert settings.env_file.stat().st_mode & 0o777 == 0o600
 
+
+def test_tavily_hikari_url_normalization():
+    assert Config._normalize_tavily_url("https://hikari.test/mcp") == "https://hikari.test/api/tavily"
+    assert Config._normalize_tavily_url("https://hikari.test/mcp/") == "https://hikari.test/api/tavily"
+    assert Config._normalize_tavily_url("https://api.tavily.com") == "https://api.tavily.com"
+    assert Config._normalize_tavily_url("https://proxy.test/custom/tavily/") == "https://proxy.test/custom/tavily"

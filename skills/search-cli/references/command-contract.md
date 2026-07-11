@@ -6,6 +6,8 @@ Success uses `{schema_version, ok: true, command, data, meta}`. Failure uses `{s
 
 Exit codes: `0` success, `1` internal, `2` usage, `3` configuration, `4` not found/expired, `5` network, `6` upstream service.
 
+When `TAVILY_API_URL` comes from a Tavily Hikari MCP endpoint ending in `/mcp`, `grok-search` automatically calls the same origin through `/api/tavily` for REST search, extract, and map operations.
+
 ## Core commands
 
 ```text

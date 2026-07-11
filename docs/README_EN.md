@@ -28,7 +28,7 @@ export TAVILY_API_URL="https://api.tavily.com"
 export TAVILY_API_KEY="your-tavily-key"
 ```
 
-GuDa users may configure only `GUDA_API_KEY`. You may also import an env-style file; `TAVILY_URL` is normalized to `TAVILY_API_URL`:
+GuDa users may configure only `GUDA_API_KEY`. You may also import an env-style file; `TAVILY_URL` is normalized to `TAVILY_API_URL`. A Tavily Hikari MCP endpoint such as `https://<origin>/mcp` is automatically converted to its REST-compatible base `https://<origin>/api/tavily`:
 
 ```bash
 grok-search config import-env /path/to/credentials.env
