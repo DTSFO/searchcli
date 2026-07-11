@@ -1,5 +1,8 @@
 import json
 import tomllib
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -40,3 +43,11 @@ def test_planning_cli_cross_process_contract(monkeypatch, tmp_path):
     result = runner.invoke(app, ["plan", "complexity", session_id, "--thought", "t", "--level", "1", "--estimated-sub-queries", "1", "--estimated-tool-calls", "1", "--justification", "simple"])
     assert result.exit_code == 0
     assert "complexity_assessment" in json.loads(result.stdout)["data"]["completed_phases"]
+
+
+def test_real_cli_usage_errors_are_structured(tmp_path):
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src"), "XDG_STATE_HOME": str(tmp_path)}
+    for args in (["bogus"], ["search"], ["map", "not-a-url"]):
+        result = subprocess.run([sys.executable, "-m", "grok_search.cli", *args], env=env, text=True, capture_output=True)
+        assert result.returncode == 2
+        assert json.loads(result.stderr)["error"]["code"] == "usage_error"

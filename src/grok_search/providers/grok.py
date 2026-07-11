@@ -172,7 +172,8 @@ class GrokSearchProvider(BaseSearchProvider):
 
     async def _parse_streaming_response(self, response, ctx=None) -> str:
         content = ""
-        full_body_buffer = [] 
+        full_body_buffer = []
+        response_sources: list[dict] = []
         
         async for line in response.aiter_lines():
             line = line.strip()
@@ -189,6 +190,7 @@ class GrokSearchProvider(BaseSearchProvider):
                     # 去掉 "data:" 前缀，并去除可能的空格
                     json_str = line[5:].lstrip()
                     data = json.loads(json_str)
+                    self._collect_response_sources(data, response_sources)
                     choices = data.get("choices", [])
                     if choices and len(choices) > 0:
                         delta = choices[0].get("delta", {})
@@ -207,9 +209,39 @@ class GrokSearchProvider(BaseSearchProvider):
             except json.JSONDecodeError:
                 pass
         
+        if response_sources:
+            source_lines = []
+            for index, source in enumerate(response_sources, 1):
+                title = source.get("title") or source["url"]
+                source_lines.append(f"{index}. [{title}]({source['url']})")
+            content = f"{content.rstrip()}\n\nSources:\n" + "\n".join(source_lines)
+
         await log_info(ctx, f"Grok response parsed ({len(content)} chars)", config.debug_enabled)
 
         return content
+
+    @staticmethod
+    def _collect_response_sources(payload, collected: list[dict]) -> None:
+        seen = {item["url"] for item in collected}
+        def walk(value):
+            if isinstance(value, dict):
+                url = value.get("url") or value.get("link") or value.get("href")
+                if isinstance(url, str) and url.startswith(("http://", "https://")) and url not in seen:
+                    seen.add(url)
+                    item = {"url": url}
+                    title = value.get("title") or value.get("name")
+                    if isinstance(title, str) and title.strip():
+                        item["title"] = title.strip()
+                    collected.append(item)
+                for key, child in value.items():
+                    if key != "content":
+                        walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+        for key in ("citations", "sources", "search_results", "web_search_results", "choices"):
+            if isinstance(payload, dict) and key in payload:
+                walk(payload[key])
 
     async def _execute_stream_with_retry(self, headers: dict, payload: dict, ctx=None) -> str:
         """执行带重试机制的流式 HTTP 请求"""

@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 
 from .config import Config, config
-from .errors import ConfigAppError, NetworkAppError, NotFoundAppError, UpstreamAppError
+from .errors import ConfigAppError, NetworkAppError, NotFoundAppError, UpstreamAppError, UsageAppError
 from .planning import PlanningEngine, PlanningSession
 from .providers.grok import GrokSearchProvider
 from .providers.web import FirecrawlProvider, TavilyProvider
@@ -25,6 +25,8 @@ class SearchService:
         self.state = state or StateRepository()
 
     async def search(self, query: str, platform: str = "", model: str = "", extra_sources: int = 0) -> dict:
+        if not query.strip():
+            raise UsageAppError("Query must not be empty")
         session_id = new_session_id()
         try:
             api_url, api_key = self.config.grok_api_url, self.config.grok_api_key
@@ -64,6 +66,11 @@ class SearchService:
         except httpx.HTTPStatusError as exc:
             raise UpstreamAppError(f"Grok returned HTTP {exc.response.status_code}", {"status_code": exc.response.status_code}) from exc
         answer, grok_sources = split_answer_and_sources(results[0] or "")
+        cited = {int(value) for value in __import__("re").findall(r"\[\[(\d+)\]\]", answer)}
+        available = {item.get("citation_number") for item in grok_sources}
+        missing = sorted(cited - available)
+        if missing:
+            warnings.append({"provider": "grok", "error": "missing_citations", "citation_numbers": missing})
         extra: list[dict] = []
         for provider_name, items in (("tavily", results[1] if tavily_count else []),
                                      ("firecrawl", results[-1] if firecrawl_count else [])):
@@ -117,9 +124,11 @@ class ContentService:
             except Exception as exc:
                 warnings.append({"provider": "tavily", "error": type(exc).__name__})
         if self.config.firecrawl_api_key:
-            content = await FirecrawlProvider(self.config.firecrawl_api_url, self.config.firecrawl_api_key).scrape(
-                url, self.config.retry_max_attempts
-            )
+            try:
+                attempts = self.config.retry_max_attempts
+            except ValueError as exc:
+                raise _config_error(exc) from exc
+            content = await FirecrawlProvider(self.config.firecrawl_api_url, self.config.firecrawl_api_key).scrape(url, attempts)
             if content:
                 return {"url": url, "content": content, "provider": "firecrawl", "warnings": warnings}
         if not self.config.tavily_api_key and not self.config.firecrawl_api_key:
@@ -157,14 +166,19 @@ class PlanningService:
 
     def process(self, phase: str, thought: str, session_id: str = "", is_revision: bool = False,
                 confidence: float = 1.0, phase_data: dict | list | None = None) -> dict:
-        engine = PlanningEngine()
-        if session_id:
-            record = self.state.load("planning", session_id)
-            engine.put_session(PlanningSession.from_dict(record["data"]))
-        result = engine.process_phase(phase=phase, thought=thought, session_id=session_id,
-                                      is_revision=is_revision, confidence=confidence, phase_data=phase_data)
-        session = engine.get_session(result["session_id"])
-        if session is None:
-            raise NotFoundAppError(f"Planning session '{result['session_id']}' not found")
-        self.state.save("planning", session.session_id, session.to_dict())
-        return result
+        target_id = session_id or new_session_id()
+        with self.state.lock("planning", target_id):
+            engine = PlanningEngine()
+            if session_id:
+                record = self.state.load("planning", session_id, refresh=False)
+                engine.put_session(PlanningSession.from_dict(record["data"]))
+            try:
+                result = engine.process_phase(phase=phase, thought=thought, session_id=target_id,
+                                              is_revision=is_revision, confidence=confidence, phase_data=phase_data)
+            except ValueError as exc:
+                raise UsageAppError(str(exc)) from exc
+            session = engine.get_session(result["session_id"])
+            if session is None:
+                raise NotFoundAppError(f"Planning session '{result['session_id']}' not found")
+            self.state.save("planning", session.session_id, session.to_dict())
+            return result

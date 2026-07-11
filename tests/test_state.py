@@ -23,3 +23,13 @@ def test_expired_state_is_removed(tmp_path):
         expired_repo.load("planning", "expired")
     assert not (tmp_path / "planning" / "expired.json").exists()
 
+
+def test_read_without_refresh_preserves_timestamps(tmp_path):
+    times = iter([
+        datetime(2026, 1, 1, tzinfo=timezone.utc),
+        datetime(2026, 1, 2, tzinfo=timezone.utc),
+    ])
+    repo = StateRepository(tmp_path, clock=lambda: next(times))
+    saved = repo.save("planning", "readonly", {"value": 1})
+    loaded = repo.load("planning", "readonly", refresh=False)
+    assert loaded == saved

@@ -11,6 +11,10 @@ from .utils import extract_unique_urls
 
 
 _MD_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+_NUMBERED_LINK_PATTERN = re.compile(
+    r"(?m)^\s*(?:[-*]\s*)?(?:\[\[?(\d+)\]?\]|(\d+)[.)])\s*[:：-]?\s*"
+    r"(?:\[([^\]]+)\]\((https?://[^)]+)\)|(https?://\S+))"
+)
 _SOURCES_HEADING_PATTERN = re.compile(
     r"(?im)^"
     r"(?:#{1,6}\s*)?"
@@ -316,6 +320,16 @@ def _normalize_sources(data: Any) -> list[dict]:
 def _extract_sources_from_text(text: str) -> list[dict]:
     sources: list[dict] = []
     seen: set[str] = set()
+
+    for bracket_number, plain_number, title, markdown_url, bare_url in _NUMBERED_LINK_PATTERN.findall(text or ""):
+        url = (markdown_url or bare_url).rstrip(".,;)")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        item = {"url": url, "citation_number": int(bracket_number or plain_number)}
+        if title.strip():
+            item["title"] = title.strip()
+        sources.append(item)
 
     for title, url in _MD_LINK_PATTERN.findall(text or ""):
         url = (url or "").strip()

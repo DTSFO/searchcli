@@ -106,17 +106,28 @@ class Config:
     @property
     def retry_max_attempts(self) -> int:
         self._load_env_file()
-        return int(os.getenv("GROK_RETRY_MAX_ATTEMPTS", "3"))
+        return self._positive_number("GROK_RETRY_MAX_ATTEMPTS", "3", int)
 
     @property
     def retry_multiplier(self) -> float:
         self._load_env_file()
-        return float(os.getenv("GROK_RETRY_MULTIPLIER", "1"))
+        return self._positive_number("GROK_RETRY_MULTIPLIER", "1", float)
 
     @property
     def retry_max_wait(self) -> int:
         self._load_env_file()
-        return int(os.getenv("GROK_RETRY_MAX_WAIT", "10"))
+        return self._positive_number("GROK_RETRY_MAX_WAIT", "10", int)
+
+    @staticmethod
+    def _positive_number(name: str, default: str, parser):
+        raw = os.getenv(name, default)
+        try:
+            value = parser(raw)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a positive number") from exc
+        if value <= 0:
+            raise ValueError(f"{name} must be a positive number")
+        return value
 
     @property
     def guda_base_url(self) -> str:

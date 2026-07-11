@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from typing import Optional, Literal
 import uuid
 
@@ -84,6 +84,14 @@ REQUIRED_PHASES: dict[int, set[str]] = {
 
 _ACCUMULATIVE_LIST_PHASES = {"query_decomposition", "tool_selection"}
 _MERGE_STRATEGY_PHASE = "search_strategy"
+_SINGLETON_PHASES = {"intent_analysis", "complexity_assessment", "execution_order"}
+_PHASE_MODELS = {
+    "intent_analysis": IntentOutput,
+    "complexity_assessment": ComplexityOutput,
+    "query_decomposition": SubQuery,
+    "tool_selection": ToolPlanItem,
+    "execution_order": ExecutionOrderOutput,
+}
 
 
 def _split_csv(value: str) -> list[str]:
@@ -113,7 +121,76 @@ class PlanningSession:
     def is_complete(self) -> bool:
         if self.complexity_level is None:
             return False
-        return self.required_phases().issubset(self.phases.keys())
+        return not self.validation_errors()
+
+    def validation_errors(self) -> list[dict]:
+        errors: list[dict] = []
+        if self.complexity_level is None:
+            return [{"code": "missing_complexity"}]
+        for phase in self.required_phases() - self.phases.keys():
+            errors.append({"code": "missing_phase", "phase": phase})
+        sub_queries = self.phases.get("query_decomposition")
+        items = sub_queries.data if sub_queries and isinstance(sub_queries.data, list) else []
+        ids = [item.get("id") for item in items if isinstance(item, dict)]
+        duplicate_ids = sorted({item for item in ids if item and ids.count(item) > 1})
+        if duplicate_ids:
+            errors.append({"code": "duplicate_sub_query_ids", "ids": duplicate_ids})
+        known = {item for item in ids if item}
+        for item in items:
+            for dependency in item.get("depends_on") or []:
+                if dependency not in known:
+                    errors.append({"code": "unknown_dependency", "sub_query_id": item.get("id"), "depends_on": dependency})
+        graph = {item.get("id"): item.get("depends_on") or [] for item in items if item.get("id")}
+        visiting: set[str] = set()
+        visited: set[str] = set()
+        def visit(node: str) -> bool:
+            if node in visiting: return True
+            if node in visited: return False
+            visiting.add(node)
+            cyclic = any(dep in graph and visit(dep) for dep in graph[node])
+            visiting.remove(node); visited.add(node)
+            return cyclic
+        if any(visit(node) for node in graph):
+            errors.append({"code": "dependency_cycle"})
+        complexity = self.phases.get("complexity_assessment")
+        expected = (complexity.data or {}).get("estimated_sub_queries", 0) if complexity else 0
+        if expected and len(known) < expected:
+            errors.append({"code": "insufficient_sub_queries", "expected": expected, "actual": len(known)})
+        if self.complexity_level and self.complexity_level >= 2:
+            strategy = self.phases.get("search_strategy")
+            purposes = {term.get("purpose") for term in (strategy.data or {}).get("search_terms", [])} if strategy else set()
+            unknown_terms = sorted(purposes - known)
+            if unknown_terms: errors.append({"code": "unknown_search_term_ids", "ids": unknown_terms})
+            missing_terms = sorted(known - purposes)
+            if missing_terms: errors.append({"code": "missing_search_terms", "ids": missing_terms})
+            tools = self.phases.get("tool_selection")
+            mapped = {item.get("sub_query_id") for item in (tools.data if tools and isinstance(tools.data, list) else [])}
+            mapping_ids = [item.get("sub_query_id") for item in (tools.data if tools and isinstance(tools.data, list) else [])]
+            duplicate_mappings = sorted({item for item in mapping_ids if item and mapping_ids.count(item) > 1})
+            if duplicate_mappings: errors.append({"code": "duplicate_tool_mappings", "ids": duplicate_mappings})
+            unknown_tools = sorted(mapped - known)
+            if unknown_tools: errors.append({"code": "unknown_tool_mapping_ids", "ids": unknown_tools})
+            missing_tools = sorted(known - mapped)
+            if missing_tools: errors.append({"code": "missing_tool_mappings", "ids": missing_tools})
+        expected_calls = (complexity.data or {}).get("estimated_tool_calls", 0) if complexity else 0
+        tools = self.phases.get("tool_selection")
+        actual_calls = len(tools.data) if tools and isinstance(tools.data, list) else len(known)
+        if expected_calls and actual_calls < expected_calls:
+            errors.append({"code": "insufficient_tool_calls", "expected": expected_calls, "actual": actual_calls})
+        execution = self.phases.get("execution_order")
+        if execution:
+            data = execution.data or {}
+            execution_ids = [item for group in data.get("parallel", []) for item in group] + data.get("sequential", [])
+            unknown_execution = sorted(set(execution_ids) - known)
+            if unknown_execution: errors.append({"code": "unknown_execution_ids", "ids": unknown_execution})
+            missing_execution = sorted(known - set(execution_ids))
+            if missing_execution: errors.append({"code": "missing_execution_ids", "ids": missing_execution})
+            positions = {item: index for index, item in enumerate(execution_ids)}
+            for node, dependencies in graph.items():
+                for dependency in dependencies:
+                    if node in positions and dependency in positions and positions[dependency] >= positions[node]:
+                        errors.append({"code": "dependency_order_violation", "sub_query_id": node, "depends_on": dependency})
+        return errors
 
     def build_executable_plan(self) -> dict:
         return {name: record.data for name, record in self.phases.items()}
@@ -165,7 +242,31 @@ class PlanningEngine:
 
         target = revises_phase if is_revision and revises_phase else phase
         if target not in PHASE_NAMES:
-            return {"error": f"Unknown phase: {target}. Valid: {', '.join(PHASE_NAMES)}"}
+            raise ValueError(f"Unknown phase: {target}. Valid: {', '.join(PHASE_NAMES)}")
+
+        try:
+            if target in _PHASE_MODELS:
+                phase_data = _PHASE_MODELS[target].model_validate(phase_data).model_dump(exclude_none=True)
+            elif target == "search_strategy":
+                if not isinstance(phase_data, dict) or not phase_data.get("search_terms"):
+                    raise ValueError("search_strategy requires search_terms")
+                phase_data = dict(phase_data)
+                phase_data["search_terms"] = [SearchTerm.model_validate(item).model_dump() for item in phase_data["search_terms"]]
+                if phase_data.get("approach") not in (None, "", "broad_first", "narrow_first", "targeted"):
+                    raise ValueError("Invalid search approach")
+        except ValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+        if target in _SINGLETON_PHASES and target in session.phases and not is_revision:
+            raise ValueError(f"Phase '{target}' already exists; use --revision to replace it")
+        target_index = PHASE_NAMES.index(target)
+        if target_index:
+            predecessor = PHASE_NAMES[target_index - 1]
+            if predecessor not in session.phases:
+                raise ValueError(f"Phase '{target}' requires '{predecessor}' first")
+        if is_revision:
+            for stale in PHASE_NAMES[target_index:]:
+                session.phases.pop(stale, None)
 
         if target in _ACCUMULATIVE_LIST_PHASES:
             if is_revision:
@@ -209,6 +310,9 @@ class PlanningEngine:
             level = phase_data.get("level")
             if level in (1, 2, 3):
                 session.complexity_level = level
+                for stale in PHASE_NAMES:
+                    if stale not in session.required_phases():
+                        session.phases.pop(stale, None)
 
         complete = session.is_complete()
         result: dict = {
@@ -221,6 +325,10 @@ class PlanningEngine:
         remaining = [p for p in PHASE_NAMES if p in session.required_phases() and p not in session.phases]
         if remaining:
             result["phases_remaining"] = remaining
+
+        diagnostics = session.validation_errors()
+        if diagnostics:
+            result["validation_errors"] = diagnostics
 
         if complete:
             result["executable_plan"] = session.build_executable_plan()

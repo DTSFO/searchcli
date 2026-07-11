@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
+
+import fcntl
 
 from .errors import NotFoundAppError
 
@@ -63,6 +66,18 @@ class StateRepository:
         }
         self._atomic_write(path, record)
         return record
+
+    @contextmanager
+    def lock(self, kind: str, session_id: str):
+        lock_path = self._path(kind, session_id).with_suffix(".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with lock_path.open("a+", encoding="utf-8") as handle:
+            os.chmod(lock_path, 0o600)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     def load(self, kind: str, session_id: str, refresh: bool = True) -> dict:
         path = self._path(kind, session_id)

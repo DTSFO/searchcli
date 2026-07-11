@@ -8,6 +8,7 @@ from typing import Optional
 
 import typer
 import click
+from pydantic import AnyHttpUrl, TypeAdapter, ValidationError
 
 from .config import config
 from .errors import AppError, ConfigAppError, UsageAppError
@@ -73,6 +74,13 @@ def _run(awaitable):
     return asyncio.run(awaitable)
 
 
+def _url(value: str) -> str:
+    try:
+        return str(TypeAdapter(AnyHttpUrl).validate_python(value))
+    except ValidationError as exc:
+        raise UsageAppError("URL must be a valid HTTP(S) URL") from exc
+
+
 @app.command("search")
 def search(query: str, platform: str = "", model: str = "", extra_sources: int = typer.Option(0, min=0)) -> None:
     data = _run(SearchService().search(query, platform, model, extra_sources))
@@ -87,7 +95,7 @@ def sources_get(session_id: str) -> None:
 
 @app.command("fetch")
 def fetch(url: str) -> None:
-    data = _run(ContentService().fetch(url))
+    data = _run(ContentService().fetch(_url(url)))
     _emit("fetch", data, {"warnings": data.pop("warnings", [])}, data["content"])
 
 
@@ -95,7 +103,7 @@ def fetch(url: str) -> None:
 def map_site(url: str, instructions: str = "", max_depth: int = typer.Option(1, min=1, max=5),
              max_breadth: int = typer.Option(20, min=1, max=500), limit: int = typer.Option(50, min=1, max=500),
              timeout: int = typer.Option(150, min=10, max=150)) -> None:
-    data = _run(ContentService().map(url, instructions, max_depth, max_breadth, limit, timeout))
+    data = _run(ContentService().map(_url(url), instructions, max_depth, max_breadth, limit, timeout))
     _emit("map", data, quiet_value=data.get("results"))
 
 
@@ -137,7 +145,7 @@ def _csv(value: str) -> list[str]:
 @plan_app.command("intent")
 def plan_intent(thought: str = typer.Option(...), core_question: str = typer.Option(...),
                 query_type: str = typer.Option(...), time_sensitivity: str = typer.Option(...),
-                session_id: str = "", confidence: float = 1.0, domain: str = "",
+                session_id: str = typer.Option("", help="Existing planning session ID; cannot create a named session."), confidence: float = 1.0, domain: str = "",
                 premise_valid: Optional[bool] = None, ambiguities: str = "", unverified_terms: str = "",
                 revision: bool = False) -> None:
     data = {"core_question": core_question, "query_type": query_type, "time_sensitivity": time_sensitivity}
@@ -213,7 +221,7 @@ def session_list(kind: str = "all") -> None:
 
 @session_app.command("show")
 def session_show(session_id: str, kind: str = "planning") -> None:
-    record = StateRepository().load(_kind(kind) or "planning", session_id)
+    record = StateRepository().load(_kind(kind) or "planning", session_id, refresh=False)
     _emit("session.show", record, quiet_value=record["data"])
 
 
@@ -257,6 +265,9 @@ def main() -> None:
         typer.echo(render(failure("cli", "usage_error", exc.format_message()), runtime.options), err=True)
         raise SystemExit(2) from exc
     except Exception as exc:
+        if getattr(exc, "exit_code", None) == 2 and hasattr(exc, "format_message"):
+            typer.echo(render(failure("cli", "usage_error", exc.format_message()), runtime.options), err=True)
+            raise SystemExit(2) from exc
         typer.echo(render(failure("cli", "internal_error", str(exc)), runtime.options), err=True)
         raise SystemExit(1) from exc
 

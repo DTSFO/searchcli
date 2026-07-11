@@ -35,6 +35,31 @@ async def test_search_persists_sources_and_isolates_optional_failure(tmp_path, m
 
 
 @pytest.mark.asyncio
+async def test_search_reports_unresolved_numbered_citations(tmp_path, monkeypatch):
+    async def fake_grok(self, query, platform="", min_results=3, max_results=10, ctx=None):
+        return "Claims [[1]] and [[2]].\n\nSources:\n1. [One](https://one.test)"
+
+    monkeypatch.setattr("grok_search.services.GrokSearchProvider.search", fake_grok)
+    service = SearchService(FakeConfig(), StateRepository(tmp_path))
+    result = await service.search("query")
+    assert result["warnings"] == [{"provider": "grok", "error": "missing_citations", "citation_numbers": [2]}]
+    sources = service.sources(result["session_id"])["sources"]
+    assert sources == [{"url": "https://one.test", "citation_number": 1, "title": "One"}]
+
+
+@pytest.mark.asyncio
+async def test_search_rejects_blank_query_before_provider(tmp_path, monkeypatch):
+    called = False
+    async def fake_grok(*args, **kwargs):
+        nonlocal called
+        called = True
+    monkeypatch.setattr("grok_search.services.GrokSearchProvider.search", fake_grok)
+    with pytest.raises(Exception, match="Query must not be empty"):
+        await SearchService(FakeConfig(), StateRepository(tmp_path)).search("  ")
+    assert called is False
+
+
+@pytest.mark.asyncio
 async def test_fetch_falls_back_to_firecrawl(monkeypatch):
     async def failed_extract(self, url):
         raise RuntimeError("tavily failed")

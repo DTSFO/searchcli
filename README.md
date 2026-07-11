@@ -97,7 +97,9 @@ search session clear --kind all
 intent → complexity → sub-query → search-term → tool-mapping → execution
 ```
 
-`plan intent` 创建并返回 `session_id`，后续命令复用该 ID。复杂度 1 需要前三阶段，复杂度 2 需要前五阶段，复杂度 3 需要全部阶段。`sub-query`、`search-term` 和 `tool-mapping` 可多次追加；`--revision` 用于替换对应阶段。
+`plan intent` 创建并返回 `session_id`，后续命令复用该 ID。阶段必须按顺序提交；复杂度 1 需要前三阶段，复杂度 2 需要前五阶段，复杂度 3 需要全部阶段。`sub-query`、`search-term` 和 `tool-mapping` 可多次追加；singleton 阶段必须使用 `--revision` 才能替换。revision 会清除依赖该阶段的下游数据。只有依赖、ID、搜索词、工具映射、执行顺序和估算均有效时，`plan_complete` 才为 true。
+
+搜索结果若包含无法映射到来源的 `[[N]]` 引用，会在 `meta.warnings` 返回 `missing_citations` 和缺失编号；CLI 不会猜测或伪造来源。`session show` 是严格只读操作，不刷新七天 TTL。
 
 ```bash
 search plan intent \

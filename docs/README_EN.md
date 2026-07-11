@@ -68,7 +68,9 @@ The stable order is:
 intent → complexity → sub-query → search-term → tool-mapping → execution
 ```
 
-`plan intent` returns a persistent `session_id`. Reuse it in every later phase. Complexity level 1 requires phases 1–3, level 2 requires phases 1–5, and level 3 requires all phases. Accumulative phases may be called repeatedly; `--revision` replaces the owning phase.
+`plan intent` returns a persistent `session_id`. Submit phases in order and reuse that ID. Level 1 requires phases 1–3, level 2 phases 1–5, and level 3 all phases. Accumulative phases may be called repeatedly; singleton phases require `--revision`, which also invalidates downstream derived phases. `plan_complete` is true only when dependencies, IDs, term/tool coverage, execution order, and estimates are valid.
+
+If an answer contains `[[N]]` citations that cannot be mapped to returned sources, `meta.warnings` reports `missing_citations` with the unresolved numbers; the CLI never invents sources. `session show` is strictly read-only and does not refresh the seven-day TTL.
 
 ## Claude Code integration
 
