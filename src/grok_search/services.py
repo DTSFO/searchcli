@@ -11,7 +11,7 @@ from .errors import ConfigAppError, NetworkAppError, NotFoundAppError, UpstreamA
 from .planning import PlanningEngine, PlanningSession
 from .providers.grok import GrokSearchProvider
 from .providers.web import FirecrawlProvider, TavilyProvider
-from .sources import merge_sources, new_session_id, split_answer_and_sources
+from .sources import has_uncited_content, merge_sources, new_session_id, split_answer_and_sources
 from .state import StateRepository
 
 
@@ -37,7 +37,11 @@ class SearchService:
             models = await self.models()
             if models and model not in models:
                 raise ConfigAppError(f"Invalid model: {model}", {"available_models": models})
-        grok = GrokSearchProvider(api_url, api_key, effective_model)
+        try:
+            retry_settings = (self.config.retry_max_attempts, self.config.retry_multiplier, self.config.retry_max_wait)
+        except ValueError as exc:
+            raise _config_error(exc) from exc
+        grok = GrokSearchProvider(api_url, api_key, effective_model, *retry_settings)
         warnings: list[dict] = []
 
         async def optional(name: str, coro):
@@ -71,6 +75,8 @@ class SearchService:
         missing = sorted(cited - available)
         if missing:
             warnings.append({"provider": "grok", "error": "missing_citations", "citation_numbers": missing})
+        if has_uncited_content(answer):
+            warnings.append({"provider": "grok", "error": "uncited_content"})
         extra: list[dict] = []
         for provider_name, items in (("tavily", results[1] if tavily_count else []),
                                      ("firecrawl", results[-1] if firecrawl_count else [])):

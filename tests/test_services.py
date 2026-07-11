@@ -14,6 +14,8 @@ class FakeConfig:
     firecrawl_api_url = "https://firecrawl.test"
     firecrawl_api_key = "firecrawl-secret"
     retry_max_attempts = 2
+    retry_multiplier = 1
+    retry_max_wait = 10
 
 
 @pytest.mark.asyncio

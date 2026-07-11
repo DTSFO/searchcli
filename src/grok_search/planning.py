@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from typing import Optional, Literal
 import uuid
 
@@ -32,18 +32,28 @@ class ComplexityOutput(BaseModel):
 
 
 class SubQuery(BaseModel):
-    id: str = Field(description="Unique identifier (e.g., 'sq1')")
+    id: str = Field(min_length=1, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$", description="Unique identifier (e.g., 'sq1')")
     goal: str
     expected_output: str = Field(description="What a successful result looks like")
-    tool_hint: Optional[str] = Field(default=None, description="Suggested tool: web_search | web_fetch | web_map")
+    tool_hint: Optional[Literal["web_search", "web_fetch", "web_map"]] = Field(default=None, description="Suggested tool")
     boundary: str = Field(description="What this sub-query explicitly excludes — MUST state mutual exclusion with sibling sub-queries, not just the broader domain")
     depends_on: Optional[list[str]] = Field(default=None, description="IDs of prerequisite sub-queries")
 
 
 class SearchTerm(BaseModel):
-    term: str = Field(description="Search query string. MUST be ≤8 words. Drop redundant synonyms (e.g., use 'RAG' not 'RAG retrieval augmented generation').")
+    term: str = Field(min_length=1, description="Search query string. MUST be ≤8 words.")
     purpose: str = Field(description="Single sub-query ID this term serves (e.g., 'sq2'). ONE term per sub-query — do NOT combine like 'sq1+sq2'.")
     round: int = Field(ge=1, description="Execution round: 1=broad discovery, 2+=targeted follow-up refined by round 1 findings")
+
+    @field_validator("term")
+    @classmethod
+    def validate_term(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Search term must not be empty")
+        if len(value.split()) > 8:
+            raise ValueError("Search term must contain at most 8 words")
+        return value
 
 
 class StrategyOutput(BaseModel):
@@ -165,9 +175,6 @@ class PlanningSession:
             if missing_terms: errors.append({"code": "missing_search_terms", "ids": missing_terms})
             tools = self.phases.get("tool_selection")
             mapped = {item.get("sub_query_id") for item in (tools.data if tools and isinstance(tools.data, list) else [])}
-            mapping_ids = [item.get("sub_query_id") for item in (tools.data if tools and isinstance(tools.data, list) else [])]
-            duplicate_mappings = sorted({item for item in mapping_ids if item and mapping_ids.count(item) > 1})
-            if duplicate_mappings: errors.append({"code": "duplicate_tool_mappings", "ids": duplicate_mappings})
             unknown_tools = sorted(mapped - known)
             if unknown_tools: errors.append({"code": "unknown_tool_mapping_ids", "ids": unknown_tools})
             missing_tools = sorted(known - mapped)
@@ -181,13 +188,19 @@ class PlanningSession:
         if execution:
             data = execution.data or {}
             execution_ids = [item for group in data.get("parallel", []) for item in group] + data.get("sequential", [])
+            duplicate_execution = sorted({item for item in execution_ids if execution_ids.count(item) > 1})
+            if duplicate_execution: errors.append({"code": "duplicate_execution_ids", "ids": duplicate_execution})
             unknown_execution = sorted(set(execution_ids) - known)
             if unknown_execution: errors.append({"code": "unknown_execution_ids", "ids": unknown_execution})
             missing_execution = sorted(known - set(execution_ids))
             if missing_execution: errors.append({"code": "missing_execution_ids", "ids": missing_execution})
+            parallel_groups = data.get("parallel", [])
+            group_by_id = {item: index for index, group in enumerate(parallel_groups) for item in group}
             positions = {item: index for index, item in enumerate(execution_ids)}
             for node, dependencies in graph.items():
                 for dependency in dependencies:
+                    if node in group_by_id and group_by_id.get(node) == group_by_id.get(dependency):
+                        errors.append({"code": "dependency_in_parallel_group", "sub_query_id": node, "depends_on": dependency})
                     if node in positions and dependency in positions and positions[dependency] >= positions[node]:
                         errors.append({"code": "dependency_order_violation", "sub_query_id": node, "depends_on": dependency})
         return errors
@@ -267,6 +280,8 @@ class PlanningEngine:
         if is_revision:
             for stale in PHASE_NAMES[target_index:]:
                 session.phases.pop(stale, None)
+            if target == "intent_analysis":
+                session.complexity_level = None
 
         if target in _ACCUMULATIVE_LIST_PHASES:
             if is_revision:

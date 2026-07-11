@@ -4,6 +4,7 @@ import re
 import uuid
 from collections import OrderedDict
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import asyncio
 
@@ -64,11 +65,34 @@ def merge_sources(*source_lists: list[dict]) -> list[dict]:
             if not isinstance(url, str) or not url.strip():
                 continue
             url = url.strip()
-            if url in seen:
+            identity = _url_identity(url)
+            if identity in seen:
                 continue
-            seen.add(url)
+            seen.add(identity)
             merged.append(item)
     return merged
+
+
+def _url_identity(url: str) -> str:
+    parts = urlsplit(url.strip())
+    scheme = parts.scheme.lower()
+    hostname = (parts.hostname or "").lower()
+    port = parts.port
+    if port and not ((scheme == "http" and port == 80) or (scheme == "https" and port == 443)):
+        hostname = f"{hostname}:{port}"
+    path = parts.path
+    if path != "/":
+        path = path.rstrip("/")
+    return urlunsplit((scheme, hostname, path, parts.query, ""))
+
+
+def has_uncited_content(text: str) -> bool:
+    if re.search(r"\[\[\d+\]\]", text or ""):
+        return False
+    without_code = re.sub(r"```.*?```", "", text or "", flags=re.DOTALL)
+    prose = re.sub(r"[#>*_`\-]", " ", without_code)
+    words = re.findall(r"[A-Za-z0-9\u4e00-\u9fff]+", prose)
+    return len(words) >= 20
 
 
 def split_answer_and_sources(text: str) -> tuple[str, list[dict]]:

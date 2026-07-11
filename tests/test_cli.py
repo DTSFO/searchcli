@@ -51,3 +51,19 @@ def test_real_cli_usage_errors_are_structured(tmp_path):
         result = subprocess.run([sys.executable, "-m", "grok_search.cli", *args], env=env, text=True, capture_output=True)
         assert result.returncode == 2
         assert json.loads(result.stderr)["error"]["code"] == "usage_error"
+
+
+def test_bare_cli_has_clean_usage_error(tmp_path):
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src"), "XDG_STATE_HOME": str(tmp_path)}
+    result = subprocess.run([sys.executable, "-m", "grok_search.cli"], env=env, text=True, capture_output=True)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert json.loads(result.stderr)["error"]["message"]
+
+
+def test_invalid_retry_config_is_config_error(tmp_path):
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src"), "XDG_STATE_HOME": str(tmp_path),
+           "GROK_API_URL": "https://grok.test/v1", "GROK_API_KEY": "secret", "GROK_RETRY_MAX_ATTEMPTS": "bad"}
+    result = subprocess.run([sys.executable, "-m", "grok_search.cli", "search", "query"], env=env, text=True, capture_output=True)
+    assert result.returncode == 3
+    assert json.loads(result.stderr)["error"]["code"] == "config_error"

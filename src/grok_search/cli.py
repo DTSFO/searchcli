@@ -18,7 +18,7 @@ from .services import ConfigService, ContentService, PlanningService, SearchServ
 from .state import StateRepository
 
 
-app = typer.Typer(help="Agent-friendly web search CLI.", no_args_is_help=True, pretty_exceptions_enable=False)
+app = typer.Typer(help="Agent-friendly web search CLI.", no_args_is_help=False, invoke_without_command=True, pretty_exceptions_enable=False)
 sources_app = typer.Typer(help="Retrieve persisted search sources.")
 config_app = typer.Typer(help="Inspect and import configuration.")
 model_app = typer.Typer(help="List or switch Grok models.")
@@ -57,6 +57,7 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def root(
+    ctx: typer.Context,
     pretty: bool = typer.Option(False, "--pretty", help="Render indented human-readable JSON."),
     quiet: bool = typer.Option(False, "--quiet", help="Print only the command's core result."),
     version_flag: Optional[bool] = typer.Option(None, "--version", callback=_version_callback, is_eager=True, help="Show version and exit."),
@@ -64,6 +65,8 @@ def root(
     if pretty and quiet:
         raise UsageAppError("--pretty and --quiet are mutually exclusive")
     runtime.options = OutputOptions(pretty=pretty, quiet=quiet)
+    if ctx.invoked_subcommand is None and not version_flag:
+        raise UsageAppError("A command is required; run 'search --help' for usage")
 
 
 def _emit(command: str, data, meta: dict | None = None, quiet_value=None) -> None:

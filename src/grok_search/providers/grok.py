@@ -117,9 +117,13 @@ class _WaitWithRetryAfter(wait_base):
 
 
 class GrokSearchProvider(BaseSearchProvider):
-    def __init__(self, api_url: str, api_key: str, model: str = "grok-4-fast"):
+    def __init__(self, api_url: str, api_key: str, model: str = "grok-4-fast",
+                 retry_attempts: int = 3, retry_multiplier: float = 1, retry_max_wait: int = 10):
         super().__init__(api_url, api_key)
         self.model = model
+        self.retry_attempts = retry_attempts
+        self.retry_multiplier = retry_multiplier
+        self.retry_max_wait = retry_max_wait
 
     def get_provider_name(self) -> str:
         return "Grok"
@@ -249,8 +253,8 @@ class GrokSearchProvider(BaseSearchProvider):
 
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             async for attempt in AsyncRetrying(
-                stop=stop_after_attempt(config.retry_max_attempts + 1),
-                wait=_WaitWithRetryAfter(config.retry_multiplier, config.retry_max_wait),
+                stop=stop_after_attempt(self.retry_attempts + 1),
+                wait=_WaitWithRetryAfter(self.retry_multiplier, self.retry_max_wait),
                 retry=retry_if_exception(_is_retryable_exception),
                 reraise=True,
             ):

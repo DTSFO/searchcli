@@ -27,7 +27,7 @@ Use `--quiet` only when a scalar/body is sufficient. Use `--pretty` for human re
 
 ## Preserve search evidence
 
-After `search`, retain `data.session_id`. Call `sources get` when citations, provenance, or source inspection matter. Check `meta.warnings` for `missing_citations`; never treat an unresolved citation as supported. Sessions persist across processes for seven days, so later commands can reuse the ID.
+After `search`, retain `data.session_id`. Call `sources get` when citations, provenance, or source inspection matter. Check `meta.warnings` for `missing_citations` and `uncited_content`; never treat unresolved or uncited claims as supported. Sessions persist across processes for seven days.
 
 ## Run multi-phase planning
 
@@ -40,7 +40,7 @@ Call phases in this order:
 5. `plan tool-mapping` once per mapping when complexity requires it
 6. `plan execution` for level 3
 
-Reuse the returned `session_id` and submit phases in order. Level 1 requires phases 1–3, level 2 requires phases 1–5, and level 3 requires all phases. Accumulative phases accept repeated calls. Singleton phases require `--revision`; revision invalidates downstream phases. Trust `plan_complete` only after inspecting any `validation_errors`.
+Reuse the returned `session_id` and submit phases in order. Level 1 requires phases 1–3, level 2 requires phases 1–5, and level 3 requires all phases. Accumulative phases accept repeated calls, including multiple tool mappings for one sub-query. Singleton phases require `--revision`; revision invalidates downstream phases. Parallel groups cannot contain dependency pairs and execution IDs must be unique. Inspect `validation_errors` whenever `plan_complete` is false.
 
 ## Handle failures
 

@@ -6,7 +6,7 @@ Success uses `{schema_version, ok: true, command, data, meta}`. Failure uses `{s
 
 Exit codes: `0` success, `1` internal, `2` usage, `3` configuration, `4` not found/expired, `5` network, `6` upstream service.
 
-Invalid commands, missing/range-invalid options, blank queries, invalid URLs, and invalid planning payloads are usage errors. Search warnings may contain `missing_citations` with unresolved `[[N]]` numbers. Planning phases are ordered; singleton phases require `--revision`, and revisions invalidate downstream phase data.
+Invalid commands, missing/range-invalid options, blank queries, invalid URLs, and invalid planning payloads are usage errors. A bare `search` writes only a structured usage error to stderr. Search warnings may contain `missing_citations` or `uncited_content`. Planning phases are ordered; singleton revisions invalidate downstream data, multiple tool calls may target one sub-query, execution IDs are unique, and dependency pairs cannot share a parallel group.
 
 When `TAVILY_API_URL` comes from a Tavily Hikari MCP endpoint ending in `/mcp`, `search` automatically calls the same origin through `/api/tavily` for REST search, extract, and map operations.
 
