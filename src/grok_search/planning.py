@@ -118,6 +118,23 @@ class PlanningSession:
     def build_executable_plan(self) -> dict:
         return {name: record.data for name, record in self.phases.items()}
 
+    def to_dict(self) -> dict:
+        return {
+            "session_id": self.session_id,
+            "complexity_level": self.complexity_level,
+            "phases": {name: record.model_dump() for name, record in self.phases.items()},
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PlanningSession":
+        session = cls(data["session_id"])
+        session.complexity_level = data.get("complexity_level")
+        session.phases = {
+            name: PhaseRecord.model_validate(record)
+            for name, record in (data.get("phases") or {}).items()
+        }
+        return session
+
 
 class PlanningEngine:
     def __init__(self):
@@ -125,6 +142,9 @@ class PlanningEngine:
 
     def get_session(self, session_id: str) -> PlanningSession | None:
         return self._sessions.get(session_id)
+
+    def put_session(self, session: PlanningSession) -> None:
+        self._sessions[session.session_id] = session
 
     def process_phase(
         self,

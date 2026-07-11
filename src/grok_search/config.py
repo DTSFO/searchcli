@@ -1,15 +1,11 @@
 import os
 import json
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 class Config:
     _instance = None
-    _SETUP_COMMAND = (
-        'claude mcp add-json grok-search --scope user '
-        '\'{"type":"stdio","command":"uvx","args":["--from",'
-        '"git+https://github.com/GuDaStudio/GrokSearch","grok-search"],'
-        '"env":{"GUDA_API_KEY":"your-guda-api-key"}}\''
-    )
+    _SETUP_HINT = "Run 'grok-search config import-env FILE' or export GROK_API_URL and GROK_API_KEY."
     _DEFAULT_MODEL = "grok-4.20-beta"
     _DEFAULT_GUDA_BASE_URL = "https://code.guda.studio"
 
@@ -18,7 +14,61 @@ class Config:
             cls._instance = super().__new__(cls)
             cls._instance._config_file = None
             cls._instance._cached_model = None
+            cls._instance._env_loaded = False
         return cls._instance
+
+    @property
+    def env_file(self) -> Path:
+        return self.config_file.parent / "env"
+
+    def _load_env_file(self) -> None:
+        if self._env_loaded:
+            return
+        self._env_loaded = True
+        if not self.env_file.exists():
+            return
+        try:
+            for raw_line in self.env_file.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                name, value = line.split("=", 1)
+                name = name.strip()
+                value = value.strip().strip('"').strip("'")
+                if name == "TAVILY_URL":
+                    name = "TAVILY_API_URL"
+                if name and value:
+                    os.environ.setdefault(name, value)
+        except OSError:
+            return
+
+    def import_env_file(self, source: Path) -> dict:
+        allowed = {
+            "GUDA_API_KEY", "GUDA_BASE_URL", "GROK_API_URL", "GROK_API_KEY", "GROK_MODEL",
+            "TAVILY_API_URL", "TAVILY_URL", "TAVILY_API_KEY", "TAVILY_ENABLED",
+            "FIRECRAWL_API_URL", "FIRECRAWL_API_KEY", "GROK_DEBUG", "GROK_LOG_LEVEL",
+            "GROK_LOG_DIR", "GROK_RETRY_MAX_ATTEMPTS", "GROK_RETRY_MULTIPLIER", "GROK_RETRY_MAX_WAIT",
+        }
+        values: dict[str, str] = {}
+        for raw_line in source.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            name = name.strip()
+            if name not in allowed:
+                continue
+            normalized = "TAVILY_API_URL" if name == "TAVILY_URL" else name
+            values[normalized] = value.strip().strip('"').strip("'")
+        self.env_file.parent.mkdir(parents=True, exist_ok=True)
+        temp = self.env_file.with_suffix(".tmp")
+        temp.write_text("".join(f"{name}={value}\n" for name, value in values.items()), encoding="utf-8")
+        os.chmod(temp, 0o600)
+        os.replace(temp, self.env_file)
+        self._env_loaded = False
+        self._cached_model = None
+        self._load_env_file()
+        return {"file": str(self.env_file), "variables": sorted(values), "count": len(values)}
 
     @property
     def config_file(self) -> Path:
@@ -50,56 +100,63 @@ class Config:
 
     @property
     def debug_enabled(self) -> bool:
+        self._load_env_file()
         return os.getenv("GROK_DEBUG", "false").lower() in ("true", "1", "yes")
 
     @property
     def retry_max_attempts(self) -> int:
+        self._load_env_file()
         return int(os.getenv("GROK_RETRY_MAX_ATTEMPTS", "3"))
 
     @property
     def retry_multiplier(self) -> float:
+        self._load_env_file()
         return float(os.getenv("GROK_RETRY_MULTIPLIER", "1"))
 
     @property
     def retry_max_wait(self) -> int:
+        self._load_env_file()
         return int(os.getenv("GROK_RETRY_MAX_WAIT", "10"))
 
     @property
     def guda_base_url(self) -> str:
+        self._load_env_file()
         return os.getenv("GUDA_BASE_URL", self._DEFAULT_GUDA_BASE_URL)
 
     @property
     def guda_api_key(self) -> str | None:
+        self._load_env_file()
         return os.getenv("GUDA_API_KEY")
 
     @property
     def grok_api_url(self) -> str:
+        self._load_env_file()
         url = os.getenv("GROK_API_URL")
         if not url:
             if self.guda_api_key:
                 return f"{self.guda_base_url}/grok/v1"
-            raise ValueError(
-                f"Grok API URL 未配置！\n"
-                f"请使用以下命令配置 MCP 服务器：\n{self._SETUP_COMMAND}"
-            )
-        return url
+            raise ValueError(f"Grok API URL 未配置！\n{self._SETUP_HINT}")
+        parts = urlsplit(url)
+        if parts.path in ("", "/"):
+            return urlunsplit((parts.scheme, parts.netloc, "/v1", parts.query, parts.fragment))
+        return url.rstrip("/")
 
     @property
     def grok_api_key(self) -> str:
+        self._load_env_file()
         key = os.getenv("GROK_API_KEY") or self.guda_api_key
         if not key:
-            raise ValueError(
-                f"Grok API Key 未配置！\n"
-                f"请使用以下命令配置 MCP 服务器：\n{self._SETUP_COMMAND}"
-            )
+            raise ValueError(f"Grok API Key 未配置！\n{self._SETUP_HINT}")
         return key
 
     @property
     def tavily_enabled(self) -> bool:
+        self._load_env_file()
         return os.getenv("TAVILY_ENABLED", "true").lower() in ("true", "1", "yes")
 
     @property
     def tavily_api_url(self) -> str:
+        self._load_env_file()
         url = os.getenv("TAVILY_API_URL")
         if not url and self.guda_api_key:
             return f"{self.guda_base_url}/tavily"
@@ -107,10 +164,12 @@ class Config:
 
     @property
     def tavily_api_key(self) -> str | None:
+        self._load_env_file()
         return os.getenv("TAVILY_API_KEY") or self.guda_api_key
 
     @property
     def firecrawl_api_url(self) -> str:
+        self._load_env_file()
         url = os.getenv("FIRECRAWL_API_URL")
         if not url and self.guda_api_key:
             return f"{self.guda_base_url}/firecrawl"
@@ -118,14 +177,17 @@ class Config:
 
     @property
     def firecrawl_api_key(self) -> str | None:
+        self._load_env_file()
         return os.getenv("FIRECRAWL_API_KEY") or self.guda_api_key
 
     @property
     def log_level(self) -> str:
+        self._load_env_file()
         return os.getenv("GROK_LOG_LEVEL", "INFO").upper()
 
     @property
     def log_dir(self) -> Path:
+        self._load_env_file()
         log_dir_str = os.getenv("GROK_LOG_DIR", "logs")
         log_dir = Path(log_dir_str)
         if log_dir.is_absolute():
@@ -160,6 +222,7 @@ class Config:
 
     @property
     def grok_model(self) -> str:
+        self._load_env_file()
         if self._cached_model is not None:
             return self._cached_model
 

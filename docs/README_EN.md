@@ -1,276 +1,106 @@
-![Image](../images/title.png)
-<div align="center">
+# Grok Search CLI
 
-<!-- # Grok Search MCP -->
+An Agent-friendly CLI for real-time web search, page extraction, site mapping, source retrieval, and persistent multi-phase research planning. It uses Grok for AI search and Tavily/Firecrawl for content operations.
 
-English | [简体中文](../README.md)
+This release is CLI-only. The MCP server, FastMCP dependency, and MCP installation flow have been removed.
 
-**Grok-with-Tavily MCP, providing enhanced web access for Claude Code**
+## Install
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/) [![FastMCP](https://img.shields.io/badge/FastMCP-2.0.0+-green.svg)](https://github.com/jlowin/fastmcp)
-
-</div>
-
----
-
-## 1. Overview
-
-Grok Search MCP is an MCP server built on [FastMCP](https://github.com/jlowin/fastmcp), featuring a **dual-engine architecture**: **Grok** handles AI-driven intelligent search, while **Tavily** handles high-fidelity web content extraction and site mapping. Together they provide complete real-time web access for LLM clients such as Claude Code and Cherry Studio.
-
-```
-Claude --MCP--> Grok Search Server
-                  ├─ web_search  ---> Grok API (AI Search)
-                  ├─ web_fetch   ---> Tavily Extract (Content Extraction)
-                  └─ web_map     ---> Tavily Map (Site Mapping)
-```
-
-### Features
-
-- **Dual Engine**: Grok search + Tavily extraction/mapping, complementary collaboration
-- **OpenAI-compatible interface**, supports any Grok mirror endpoint
-- **Automatic time injection** (detects time-related queries, injects local time context)
-- One-click disable Claude Code's built-in WebSearch/WebFetch, force routing to this tool
-- Smart retry (Retry-After header parsing + exponential backoff)
-- Parent process monitoring (auto-detects parent process exit on Windows, prevents zombie processes)
-
-### Demo
-
-Using `cherry studio` with this MCP configured, here's how `claude-opus-4.6` leverages this project for external knowledge retrieval, reducing hallucination rates.
-
-![](../images/wogrok.png)
-As shown above, **for a fair experiment, we enabled Claude's built-in search tools**, yet Opus 4.6 still relied on its internal knowledge without consulting FastAPI's official documentation for the latest examples.
-
-![](../images/wgrok.png)
-As shown above, with `grok-search MCP` enabled under the same experimental conditions, Opus 4.6 proactively made multiple search calls to **retrieve official documentation, producing more reliable answers.**
-
-
-## 2. Installation
-
-### Prerequisites
-
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) (recommended Python package manager)
-- Claude Code
-
-<details>
-<summary><b>Install uv</b></summary>
+Python 3.10+ is required.
 
 ```bash
-# Linux/macOS
-curl -LsSf https://astral.sh/uv/install.sh | sh
+uvx --from git+https://github.com/GuDaStudio/GrokSearch@grok-with-tavily grok-search --help
 
-# Windows PowerShell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+# local development
+python -m pip install -e .
+grok-search --version
 ```
 
-> Windows users are **strongly recommended** to run this project in WSL.
+## Configure
 
-</details>
-
-### One-Click Install
-
-If you have previously installed this project, remove the old MCP first:
-```
-claude mcp remove grok-search
-```
-
-Replace the environment variables in the following command with your own values. The Grok endpoint must be OpenAI-compatible; Tavily is optional — `web_fetch` and `web_map` will be unavailable without it.
-
-#### GuDa Users (Recommended)
-
-GuDa users only need to set `GUDA_API_KEY` to access all services — API URLs are automatically derived:
+Export variables directly:
 
 ```bash
-claude mcp add-json grok-search --scope user '{
-  "type": "stdio",
-  "command": "uvx",
-  "args": [
-    "--from",
-    "git+https://github.com/GuDaStudio/GrokSearch@grok-with-tavily",
-    "grok-search"
-  ],
-  "env": {
-    "GUDA_API_KEY": "your-guda-api-key"
-  }
-}'
+export GROK_API_URL="https://your-api.example/v1"
+export GROK_API_KEY="your-key"
+export GROK_MODEL="grok-4.20-beta"
+export TAVILY_API_URL="https://api.tavily.com"
+export TAVILY_API_KEY="your-tavily-key"
 ```
 
-#### Custom Configuration
-
-To use your own API endpoints, configure each service separately:
+GuDa users may configure only `GUDA_API_KEY`. You may also import an env-style file; `TAVILY_URL` is normalized to `TAVILY_API_URL`:
 
 ```bash
-claude mcp add-json grok-search --scope user '{
-  "type": "stdio",
-  "command": "uvx",
-  "args": [
-    "--from",
-    "git+https://github.com/GuDaStudio/GrokSearch@grok-with-tavily",
-    "grok-search"
-  ],
-  "env": {
-    "GROK_API_URL": "https://your-api-endpoint.com/v1",
-    "GROK_API_KEY": "your-grok-api-key",
-    "TAVILY_API_KEY": "tvly-your-tavily-key",
-    "TAVILY_API_URL": "https://api.tavily.com"
-  }
-}'
+grok-search config import-env /path/to/credentials.env
+grok-search config show --check
 ```
 
-You can also configure additional environment variables in the `env` field:
+The managed credential file is user-readable only. Keys are never stored in search/planning sessions and are masked in diagnostics.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `GUDA_API_KEY` | No | - | GuDa API key (auto-derives all service URLs and keys when set) |
-| `GUDA_BASE_URL` | No | `https://code.guda.studio` | GuDa service base URL |
-| `GROK_API_URL` | No | `{GUDA_BASE_URL}/grok/v1` | Grok API endpoint (OpenAI-compatible), overrides GuDa-derived value |
-| `GROK_API_KEY` | No | `{GUDA_API_KEY}` | Grok API key, overrides GuDa-derived value |
-| `GROK_MODEL` | No | `grok-4.20-beta` | Default model (takes precedence over `~/.config/grok-search/config.json` when set) |
-| `TAVILY_API_KEY` | No | `{GUDA_API_KEY}` | Tavily API key (for web_fetch / web_map) |
-| `TAVILY_API_URL` | No | `{GUDA_BASE_URL}/tavily` | Tavily API endpoint |
-| `TAVILY_ENABLED` | No | `true` | Enable Tavily |
-| `FIRECRAWL_API_KEY` | No | `{GUDA_API_KEY}` | Firecrawl API key (fallback when Tavily fails) |
-| `FIRECRAWL_API_URL` | No | `{GUDA_BASE_URL}/firecrawl` | Firecrawl API endpoint |
-| `GROK_DEBUG` | No | `false` | Debug mode |
-| `GROK_LOG_LEVEL` | No | `INFO` | Log level |
-| `GROK_LOG_DIR` | No | `logs` | Log directory |
-| `GROK_RETRY_MAX_ATTEMPTS` | No | `3` | Max retry attempts |
-| `GROK_RETRY_MULTIPLIER` | No | `1` | Retry backoff multiplier |
-| `GROK_RETRY_MAX_WAIT` | No | `10` | Max retry wait in seconds |
+## Output
 
-> **Note**: When `GUDA_API_KEY` is set, all `GROK_API_URL`/`GROK_API_KEY`/`TAVILY_*`/`FIRECRAWL_*` variables become optional as they are auto-derived from `GUDA_BASE_URL`. Explicitly set variables take higher priority.
+Compact JSON is the default. `--pretty` emits indented JSON and `--quiet` emits only the core value. Output shape never changes based on TTY detection. Results use stdout; structured failures use stderr.
 
+Exit codes: `0` success, `1` internal, `2` usage, `3` configuration, `4` not found/expired, `5` network, `6` upstream.
 
-### Verify Installation
+## Commands
 
 ```bash
-claude mcp list
+grok-search search "latest Python release" --extra-sources 3
+grok-search sources get SESSION_ID
+grok-search fetch https://example.com
+grok-search map https://docs.example.com --max-depth 2 --limit 100
+grok-search config show --check
+grok-search model list
+grok-search model current
+grok-search model set MODEL_ID
+grok-search session list
+grok-search session show SESSION_ID --kind planning
 ```
 
-After confirming a successful connection, we **highly recommend** typing the following in a Claude conversation:
+Use `grok-search COMMAND --help` for the full scalar argument contract.
+
+## Agent planning protocol
+
+The stable order is:
+
+```text
+intent → complexity → sub-query → search-term → tool-mapping → execution
 ```
-Call grok-search toggle_builtin_tools to disable Claude Code's built-in WebSearch and WebFetch tools
+
+`plan intent` returns a persistent `session_id`. Reuse it in every later phase. Complexity level 1 requires phases 1–3, level 2 requires phases 1–5, and level 3 requires all phases. Accumulative phases may be called repeatedly; `--revision` replaces the owning phase.
+
+## Claude Code integration
+
+```bash
+grok-search integrations claude status
+grok-search integrations claude disable-builtins
+grok-search integrations claude enable-builtins
 ```
-This will automatically modify the **project-level** `.claude/settings.json` `permissions.deny`, disabling Claude Code's built-in WebSearch and WebFetch, forcing Claude Code to use this project for searches!
 
+Only `WebFetch` and `WebSearch` entries in the current Git project's `.claude/settings.json` are managed.
 
+## Agent Skill
 
-## 3. MCP Tools
+The canonical Skill lives at `skills/search-cli` and can be installed at:
 
-<details>
-<summary>This project provides eight MCP tools (click to expand)</summary>
+```text
+~/.codex/skills/search-cli
+~/.claude/skills/search-cli
+~/.pi/agent/skills/search-cli
+```
 
-### `web_search` — AI Web Search
+## MCP migration
 
-Executes AI-driven web search via Grok API. By default it returns only Grok's answer and a `session_id` for retrieving sources later.
+Use `search`, `sources get`, `fetch`, `map`, `config show`, `model set`, the Claude integration commands, and the six `plan` subcommands in place of the former MCP tools. Remove old `claude mcp` configuration; this package no longer starts a stdio server.
 
-`web_search` does not expand sources in the response; it only returns `sources_count`. Sources are cached server-side by `session_id` and can be fetched with `get_sources`.
+## Development
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `query` | string | Yes | - | Search query |
-| `platform` | string | No | `""` | Focus platform (e.g., `"Twitter"`, `"GitHub, Reddit"`) |
-| `model` | string | No | `null` | Per-request Grok model ID |
-| `extra_sources` | int | No | `0` | Extra sources via Tavily/Firecrawl (0 disables) |
+```bash
+python -m pip install -e '.[dev]'
+python -m compileall -q src tests
+python -m pytest -q
+python -m build
+```
 
-Automatically detects time-related keywords in queries (e.g., "latest", "today", "recent"), injecting local time context to improve accuracy for time-sensitive searches.
-
-Return value (structured dict):
-- `session_id`: search session ID
-- `content`: answer only (sources removed)
-- `sources_count`: cached sources count
-
-### `get_sources` — Retrieve Sources
-
-Retrieves the full cached source list for a previous `web_search` call.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `session_id` | string | Yes | `session_id` returned by `web_search` |
-
-Return value (structured dict):
-- `session_id`
-- `sources_count`
-- `sources`: source list (each item includes `url`, may include `title`/`description`/`provider`)
-
-### `web_fetch` — Web Content Extraction
-
-Extracts complete web content via Tavily Extract API, returning Markdown format.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `url` | string | Yes | Target webpage URL |
-
-### `web_map` — Site Structure Mapping
-
-Traverses website structure via Tavily Map API, discovering URLs and generating a site map.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `url` | string | Yes | - | Starting URL |
-| `instructions` | string | No | `""` | Natural language filtering instructions |
-| `max_depth` | int | No | `1` | Max traversal depth (1-5) |
-| `max_breadth` | int | No | `20` | Max links to follow per page (1-500) |
-| `limit` | int | No | `50` | Total link processing limit (1-500) |
-| `timeout` | int | No | `150` | Timeout in seconds (10-150) |
-
-### `get_config_info` — Configuration Diagnostics
-
-No parameters required. Displays all configuration status, tests Grok API connection, returns response time and available model list (API keys auto-masked).
-
-### `switch_model` — Model Switching
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `model` | string | Yes | Model ID (e.g., `"grok-4-fast"`, `"grok-2-latest"`) |
-
-Settings persist to `~/.config/grok-search/config.json` across sessions.
-
-### `toggle_builtin_tools` — Tool Routing Control
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `action` | string | No | `"status"` | `"on"` disable built-in tools / `"off"` enable built-in tools / `"status"` check status |
-
-Modifies project-level `.claude/settings.json` `permissions.deny` to disable Claude Code's built-in WebSearch and WebFetch.
-
-### `search_planning` — Search Planning
-
-A structured multi-phase planning scaffold to generate an executable search plan before running complex searches.
-</details>
-
-## 4. FAQ
-
-<details>
-<summary>
-Q: Must I configure both Grok and Tavily?
-</summary>
-A: Set `GUDA_API_KEY` to get full Grok + Tavily + Firecrawl service. Without GuDa, Grok (`GROK_API_URL` + `GROK_API_KEY`) is required and provides the core search capability. Tavily is optional — without it, `web_fetch` and `web_map` will return configuration error messages.
-</details>
-
-<details>
-<summary>
-Q: What format does the Grok API URL need?
-</summary>
-A: An OpenAI-compatible API endpoint (supporting `/chat/completions` and `/models` endpoints). If using official Grok, access it through an OpenAI-compatible mirror.
-</details>
-
-<details>
-<summary>
-Q: How to verify configuration?
-</summary>
-A: Say "Show grok-search configuration info" in a Claude conversation to automatically test the API connection and display results.
-</details>
-
-## License
-
-[MIT License](LICENSE)
-
----
-
-<div align="center">
-
-**If this project helps you, please give it a Star!**
-
-[![Star History Chart](https://api.star-history.com/svg?repos=GuDaStudio/GrokSearch&type=date&legend=top-left)](https://www.star-history.com/#GuDaStudio/GrokSearch&type=date&legend=top-left)
-</div>
+[中文文档](../README.md) · MIT License

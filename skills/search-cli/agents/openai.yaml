@@ -1,0 +1,4 @@
+interface:
+  display_name: "Search CLI"
+  short_description: "Search, fetch, map, and plan through grok-search"
+  default_prompt: "Use $search-cli to research this request with the grok-search CLI."

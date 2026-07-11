@@ -26,6 +26,8 @@ except OSError:
 async def log_info(ctx, message: str, is_debug: bool = False):
     if is_debug:
         logger.info(message)
-        
-    if ctx:
-        await ctx.info(message)
+
+
+def debug(message: str) -> None:
+    if config.debug_enabled:
+        logger.info(message)
