@@ -89,8 +89,11 @@ def _url_identity(url: str) -> str:
 def has_uncited_content(text: str) -> bool:
     without_code = re.sub(r"```.*?```", "", text or "", flags=re.DOTALL)
     for paragraph in re.split(r"\n\s*\n", without_code):
-        stripped = paragraph.strip()
-        if not stripped or stripped.startswith("#") or _is_link_only_block(stripped):
+        stripped = "\n".join(
+            line for line in paragraph.splitlines()
+            if not re.match(r"^\s*#{1,6}(?:\s+|$)", line)
+        ).strip()
+        if not stripped or _is_link_only_block(stripped):
             continue
         sentences = [item.strip() for item in re.split(r"(?<=[.!?。！？；;])\s*", stripped) if item.strip()]
         uncited = [item for item in sentences if not re.search(r"\[\[\d+\]\]", item)]

@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grok-search"
-version = "2.0.5"
+version = "2.0.6"
 description = "Agent-friendly CLI for Grok, Tavily, and Firecrawl web search"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "click>=8.1",
     "httpx[socks]>=0.28.0",
     "pydantic>=2.0.0",
     "tenacity>=8.0.0",

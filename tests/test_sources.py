@@ -34,3 +34,8 @@ def test_uncited_content_supports_chinese_thresholds():
     assert has_uncited_content("这个版本已经修改了默认执行流程，并且调整了多个配置字段的含义，同时改变了会话持久化和错误分类的具体行为。")
     assert not has_uncited_content("这是简短说明。")
     assert not has_uncited_content("```text\n这是很长的中文代码块内容，不应被当作需要引用的事实正文，即使字符数量超过阈值。\n```")
+
+
+def test_uncited_content_checks_body_after_single_newline_heading():
+    text = "# Summary\n这里是一段足够长且完全没有引用的事实正文，它说明了版本发布时间、默认配置变化、兼容性范围以及多个命令行为的具体调整。"
+    assert has_uncited_content(text)

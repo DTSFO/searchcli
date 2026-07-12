@@ -26,6 +26,11 @@ def test_console_script_is_search_only():
     assert "grok-search" not in scripts
 
 
+def test_direct_click_dependency_is_declared():
+    project = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
+    assert any(item.startswith("click>=") for item in project["project"]["dependencies"])
+
+
 def test_model_current_is_json(monkeypatch, tmp_path):
     monkeypatch.setenv("GROK_MODEL", "test-model")
     result = runner.invoke(app, ["model", "current"])
