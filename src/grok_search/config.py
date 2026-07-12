@@ -1,5 +1,6 @@
 import os
 import json
+import math
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -125,7 +126,7 @@ class Config:
             value = parser(raw)
         except ValueError as exc:
             raise ValueError(f"{name} must be a positive number") from exc
-        if value <= 0:
+        if not math.isfinite(value) or value <= 0:
             raise ValueError(f"{name} must be a positive number")
         return value
 

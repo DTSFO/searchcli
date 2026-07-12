@@ -80,19 +80,42 @@ def _url_identity(url: str) -> str:
     port = parts.port
     if port and not ((scheme == "http" and port == 80) or (scheme == "https" and port == 443)):
         hostname = f"{hostname}:{port}"
-    path = parts.path
+    path = parts.path or "/"
     if path != "/":
         path = path.rstrip("/")
     return urlunsplit((scheme, hostname, path, parts.query, ""))
 
 
 def has_uncited_content(text: str) -> bool:
-    if re.search(r"\[\[\d+\]\]", text or ""):
-        return False
     without_code = re.sub(r"```.*?```", "", text or "", flags=re.DOTALL)
-    prose = re.sub(r"[#>*_`\-]", " ", without_code)
-    words = re.findall(r"[A-Za-z0-9\u4e00-\u9fff]+", prose)
-    return len(words) >= 20
+    for paragraph in re.split(r"\n\s*\n", without_code):
+        stripped = paragraph.strip()
+        if not stripped or stripped.startswith("#") or _is_link_only_block(stripped):
+            continue
+        sentences = [item.strip() for item in re.split(r"(?<=[.!?。！？；;])\s*", stripped) if item.strip()]
+        uncited = [item for item in sentences if not re.search(r"\[\[\d+\]\]", item)]
+        for sentence in uncited:
+            if _needs_citation(sentence):
+                return True
+        if len(uncited) >= 2 and _needs_citation(" ".join(uncited), english_words=20, cjk_chars=45):
+            return True
+    return False
+
+
+def _needs_citation(text: str, english_words: int = 16, cjk_chars: int = 35) -> bool:
+    prose = re.sub(r"[#>*_`\-]|\[\[\d+\]\]", " ", text)
+    words = re.findall(r"[A-Za-z0-9]+", prose)
+    cjk = re.findall(r"[\u4e00-\u9fff]", prose)
+    return len(words) >= english_words or len(cjk) >= cjk_chars
+
+
+def _is_link_only_block(text: str) -> bool:
+    meaningful = []
+    for line in text.splitlines():
+        cleaned = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+        if cleaned and not _is_link_only_line(cleaned):
+            meaningful.append(cleaned)
+    return not meaningful
 
 
 def split_answer_and_sources(text: str) -> tuple[str, list[dict]]:

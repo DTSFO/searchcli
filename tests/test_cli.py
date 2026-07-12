@@ -67,3 +67,12 @@ def test_invalid_retry_config_is_config_error(tmp_path):
     result = subprocess.run([sys.executable, "-m", "grok_search.cli", "search", "query"], env=env, text=True, capture_output=True)
     assert result.returncode == 3
     assert json.loads(result.stderr)["error"]["code"] == "config_error"
+
+
+def test_non_finite_retry_config_is_config_error(tmp_path):
+    for value in ("nan", "inf", "-inf"):
+        env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src"), "XDG_STATE_HOME": str(tmp_path),
+               "GROK_API_URL": "https://grok.test/v1", "GROK_API_KEY": "secret", "GROK_RETRY_MULTIPLIER": value}
+        result = subprocess.run([sys.executable, "-m", "grok_search.cli", "search", "query"], env=env, text=True, capture_output=True)
+        assert result.returncode == 3
+        assert json.loads(result.stderr)["error"]["code"] == "config_error"

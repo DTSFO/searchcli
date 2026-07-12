@@ -27,7 +27,7 @@ Use `--quiet` only when a scalar/body is sufficient. Use `--pretty` for human re
 
 ## Preserve search evidence
 
-After `search`, retain `data.session_id`. Call `sources get` when citations, provenance, or source inspection matter. Check `meta.warnings` for `missing_citations` and `uncited_content`; never treat unresolved or uncited claims as supported. Sessions persist across processes for seven days.
+After `search`, retain `data.session_id`. Call `sources get` when citations, provenance, or source inspection matter. Check `meta.warnings` for `missing_citations` and paragraph-level `uncited_content`; never treat unresolved or uncited claims as supported. Sessions persist across processes for seven days.
 
 ## Run multi-phase planning
 

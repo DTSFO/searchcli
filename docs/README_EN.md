@@ -70,7 +70,7 @@ intent → complexity → sub-query → search-term → tool-mapping → executi
 
 `plan intent` returns a persistent `session_id`. Submit phases in order and reuse that ID. Level 1 requires phases 1–3, level 2 phases 1–5, and level 3 all phases. Accumulative phases may be called repeatedly and one sub-query may have multiple tool calls; singleton phases require `--revision`, which invalidates downstream phases. `plan_complete` additionally requires unique execution IDs and forbids dependencies within one parallel group.
 
-If an answer contains `[[N]]` citations that cannot be mapped to returned sources, `meta.warnings` reports `missing_citations`; substantial factual prose with no citations reports `uncited_content`. The CLI never invents sources and normalizes equivalent URLs for deduplication. `session show` is strictly read-only and does not refresh the seven-day TTL.
+If an answer contains `[[N]]` citations that cannot be mapped to returned sources, `meta.warnings` reports `missing_citations`. Paragraph- and sentence-level checks report `uncited_content` for substantial uncited English or Chinese prose even when another paragraph is cited. The CLI never invents sources and normalizes equivalent URLs, including root slash variants. `session show` is strictly read-only.
 
 ## Claude Code integration
 

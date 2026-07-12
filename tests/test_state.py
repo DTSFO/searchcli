@@ -33,3 +33,18 @@ def test_read_without_refresh_preserves_timestamps(tmp_path):
     saved = repo.save("planning", "readonly", {"value": 1})
     loaded = repo.load("planning", "readonly", refresh=False)
     assert loaded == saved
+
+
+def test_lock_inode_is_stable_across_delete_and_reuse(tmp_path):
+    repo = StateRepository(tmp_path)
+    repo.save("planning", "reused", {"value": 1})
+    with repo.lock("planning", "reused"):
+        pass
+    lock_path = tmp_path / "planning" / "reused.lock"
+    inode = lock_path.stat().st_ino
+    assert repo.delete("planning", "reused") is True
+    assert lock_path.exists()
+    with repo.lock("planning", "reused"):
+        repo.save("planning", "reused", {"value": 2})
+    assert lock_path.stat().st_ino == inode
+    assert repo.load("planning", "reused", refresh=False)["data"] == {"value": 2}

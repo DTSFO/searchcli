@@ -99,7 +99,7 @@ intent → complexity → sub-query → search-term → tool-mapping → executi
 
 `plan intent` 创建并返回 `session_id`，后续命令复用该 ID。阶段必须按顺序提交；复杂度 1 需要前三阶段，复杂度 2 需要前五阶段，复杂度 3 需要全部阶段。`sub-query`、`search-term` 和 `tool-mapping` 可多次追加，同一 sub-query 可映射多个工具调用；singleton 阶段必须使用 `--revision` 才能替换。revision 会清除依赖该阶段的下游数据。只有依赖、ID、搜索词、工具调用覆盖、无重复 execution ID、并行组无内部依赖且估算均有效时，`plan_complete` 才为 true。
 
-搜索结果若包含无法映射到来源的 `[[N]]` 引用，会在 `meta.warnings` 返回 `missing_citations` 和缺失编号；明显的长篇事实性正文完全没有引用时返回 `uncited_content`。CLI 不会猜测或伪造来源，等价 URL 会规范化去重。`session show` 是严格只读操作，不刷新七天 TTL。
+搜索结果若包含无法映射到来源的 `[[N]]` 引用，会在 `meta.warnings` 返回 `missing_citations` 和缺失编号；按段落/句子检测到中英文事实内容未引用时返回 `uncited_content`，其他位置的引用不会掩盖该段落。CLI 不会猜测或伪造来源，等价 URL（包括根路径有无 `/`）会规范化去重。`session show` 是严格只读操作，不刷新七天 TTL。
 
 ```bash
 search plan intent \
