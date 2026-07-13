@@ -39,7 +39,7 @@ The managed credential file is user-readable only. Keys are never stored in sear
 
 ## Output
 
-Compact JSON is the default. `--pretty` emits indented JSON and `--quiet` emits only the core value. Output shape never changes based on TTY detection. Results use stdout; structured failures use stderr.
+Compact JSON is the default. `--pretty` emits indented JSON and `--quiet` emits only the core value. They are global options, so the canonical placement is before the subcommand, for example `search --pretty model current` or `search --quiet fetch https://example.com`. For compatibility with Agents that append options, the CLI also accepts either flag at the very end. Output shape never changes based on TTY detection. Results use stdout; structured failures use stderr.
 
 Exit codes: `0` success, `1` internal, `2` usage, `3` configuration, `4` not found/expired, `5` network, `6` upstream.
 

@@ -12,6 +12,8 @@ When `TAVILY_API_URL` comes from a Tavily Hikari MCP endpoint ending in `/mcp`, 
 
 ## Core commands
 
+Output flags are global. Use the canonical placement `search --pretty COMMAND ...` or `search --quiet COMMAND ...`. The CLI also accepts either flag at the very end for compatibility with tools that append options, but Agent instructions should always use the canonical placement.
+
 ```text
 search search QUERY [--platform TEXT] [--model TEXT] [--extra-sources N]
 search sources get SESSION_ID

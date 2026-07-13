@@ -54,8 +54,9 @@ API Key 不会写入搜索/规划 session，也不会在配置诊断中明文显
 {"schema_version":1,"ok":true,"command":"model.current","data":{"model":"grok-4.20-beta"},"meta":{}}
 ```
 
-- `--pretty`：缩进 JSON，适合人工查看。
-- `--quiet`：只输出正文、标量或核心数组，适合管道。
+- `--pretty`：缩进 JSON，适合人工查看；标准写法是放在命令名后、子命令前，例如 `search --pretty model current`。
+- `--quiet`：只输出正文、标量或核心数组，适合管道，例如 `search --quiet fetch https://example.com`。
+- 为兼容会在末尾追加选项的 Agent，CLI 也接受末尾的 `--pretty` / `--quiet`，但文档与 Skill 统一使用标准写法。
 - stdout 只包含结果；失败 JSON 和诊断写入 stderr。
 - 退出码：`0` 成功、`1` 内部错误、`2` 参数错误、`3` 配置错误、`4` session 不存在/过期、`5` 网络错误、`6` 上游错误。
 

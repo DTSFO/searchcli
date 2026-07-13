@@ -40,6 +40,43 @@ def test_model_current_is_json(monkeypatch, tmp_path):
     assert payload["data"]["model"] == "test-model"
 
 
+def test_output_flags_accept_canonical_and_trailing_positions(monkeypatch):
+    monkeypatch.setenv("GROK_MODEL", "test-model")
+
+    for args in (["--pretty", "model", "current"], ["model", "current", "--pretty"]):
+        result = runner.invoke(app, args)
+        assert result.exit_code == 0
+        assert result.stdout.startswith("{\n")
+        assert json.loads(result.stdout)["data"]["model"] == "test-model"
+
+    for args in (["--quiet", "model", "current"], ["model", "current", "--quiet"]):
+        result = runner.invoke(app, args)
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "test-model"
+
+
+def test_search_command_accepts_trailing_pretty(monkeypatch):
+    async def fake_search(self, query, platform="", model="", extra_sources=0):
+        return {"session_id": "test-session", "content": "answer", "sources_count": 0, "warnings": []}
+
+    monkeypatch.setattr("grok_search.cli.SearchService.search", fake_search)
+    result = runner.invoke(app, ["search", "query", "--pretty"])
+    assert result.exit_code == 0
+    assert result.stdout.startswith("{\n")
+    assert json.loads(result.stdout)["data"]["content"] == "answer"
+
+
+def test_double_dash_preserves_output_flag_as_query(monkeypatch):
+    async def fake_search(self, query, platform="", model="", extra_sources=0):
+        return {"session_id": "test-session", "content": query, "sources_count": 0, "warnings": []}
+
+    monkeypatch.setattr("grok_search.cli.SearchService.search", fake_search)
+    result = runner.invoke(app, ["search", "--", "--pretty"])
+    assert result.exit_code == 0
+    assert result.stdout.startswith('{"schema_version"')
+    assert json.loads(result.stdout)["data"]["content"] == "--pretty"
+
+
 def test_planning_cli_cross_process_contract(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     result = runner.invoke(app, ["plan", "intent", "--thought", "t", "--core-question", "q", "--query-type", "factual", "--time-sensitivity", "recent"])

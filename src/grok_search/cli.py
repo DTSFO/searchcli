@@ -9,6 +9,7 @@ from typing import Optional
 import typer
 import click
 from pydantic import AnyHttpUrl, TypeAdapter, ValidationError
+from typer.core import TyperGroup
 
 from .config import config
 from .errors import AppError, ConfigAppError, UsageAppError
@@ -18,7 +19,24 @@ from .services import ConfigService, ContentService, PlanningService, SearchServ
 from .state import StateRepository
 
 
-app = typer.Typer(help="Agent-friendly web search CLI.", no_args_is_help=False, invoke_without_command=True, pretty_exceptions_enable=False)
+_OUTPUT_FLAGS = {"--pretty", "--quiet"}
+
+
+class OutputOptionsGroup(TyperGroup):
+    """Accept global output flags in the common trailing position too."""
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        normalized = list(args)
+        trailing: list[str] = []
+        if "--" not in normalized:
+            while normalized and normalized[-1] in _OUTPUT_FLAGS:
+                trailing.append(normalized.pop())
+        if trailing:
+            normalized = [*reversed(trailing), *normalized]
+        return super().parse_args(ctx, normalized)
+
+
+app = typer.Typer(cls=OutputOptionsGroup, help="Agent-friendly web search CLI.", no_args_is_help=False, invoke_without_command=True, pretty_exceptions_enable=False)
 sources_app = typer.Typer(help="Retrieve persisted search sources.")
 config_app = typer.Typer(help="Inspect and import configuration.")
 model_app = typer.Typer(help="List or switch Grok models.")

@@ -23,7 +23,7 @@ Use `search` as an Agent-facing command line tool. Its default output is JSON; p
 - Inspect or switch models: `search model list|current|set`
 - Build a structured plan for a complex research task: use the `search plan` phase commands below.
 
-Use `--quiet` only when a scalar/body is sufficient. Use `--pretty` for human review. Do not combine them.
+`--pretty` and `--quiet` are global options. Put them immediately after the executable, before every subcommand: `search --pretty search "<query>"` or `search --quiet fetch <url>`. Never append them to the end of a command. Use `--quiet` only when a scalar/body is sufficient, use `--pretty` for human review, and do not combine them.
 
 ## Preserve search evidence
 
