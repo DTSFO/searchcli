@@ -198,8 +198,9 @@ class GrokSearchProvider(BaseSearchProvider):
                     choices = data.get("choices", [])
                     if choices and len(choices) > 0:
                         delta = choices[0].get("delta", {})
-                        if "content" in delta:
-                            content += delta["content"]
+                        chunk = delta.get("content")
+                        if chunk:
+                            content += chunk
                 except (json.JSONDecodeError, IndexError):
                     continue
                 
@@ -209,7 +210,7 @@ class GrokSearchProvider(BaseSearchProvider):
                 data = json.loads(full_text)
                 if "choices" in data and len(data["choices"]) > 0:
                     message = data["choices"][0].get("message", {})
-                    content = message.get("content", "")
+                    content = message.get("content") or ""
             except json.JSONDecodeError:
                 pass
         
