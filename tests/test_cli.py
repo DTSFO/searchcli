@@ -118,3 +118,21 @@ def test_non_finite_retry_config_is_config_error(tmp_path):
         result = subprocess.run([sys.executable, "-m", "grok_search.cli", "search", "query"], env=env, text=True, capture_output=True)
         assert result.returncode == 3
         assert json.loads(result.stderr)["error"]["code"] == "config_error"
+
+
+def test_map_default_timeout(monkeypatch):
+    captured_timeout = None
+
+    async def fake_map(self, url, instructions, max_depth, max_breadth, limit, timeout):
+        nonlocal captured_timeout
+        captured_timeout = timeout
+        return {"base_url": url, "results": ["https://example.com/page"], "response_time": 0.1}
+
+    monkeypatch.setattr("grok_search.cli.ContentService.map", fake_map)
+    result = runner.invoke(app, ["map", "https://example.com"])
+    assert result.exit_code == 0
+    assert captured_timeout == 30
+
+    result = runner.invoke(app, ["map", "https://example.com", "--timeout", "45"])
+    assert result.exit_code == 0
+    assert captured_timeout == 45

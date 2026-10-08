@@ -141,7 +141,7 @@ class ContentService:
             raise ConfigAppError("TAVILY_API_KEY and FIRECRAWL_API_KEY are not configured")
         raise UpstreamAppError("All content extraction providers failed", {"warnings": warnings})
 
-    async def map(self, url: str, instructions: str, max_depth: int, max_breadth: int, limit: int, timeout: int) -> dict:
+    async def map(self, url: str, instructions: str, max_depth: int, max_breadth: int, limit: int, timeout: int = 30) -> dict:
         return await TavilyProvider(self.config.tavily_api_url, self.config.tavily_api_key).map(
             url, instructions, max_depth, max_breadth, limit, timeout
         )

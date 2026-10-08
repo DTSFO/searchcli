@@ -123,7 +123,7 @@ def fetch(url: str) -> None:
 @app.command("map")
 def map_site(url: str, instructions: str = "", max_depth: int = typer.Option(1, min=1, max=5),
              max_breadth: int = typer.Option(20, min=1, max=500), limit: int = typer.Option(50, min=1, max=500),
-             timeout: int = typer.Option(150, min=10, max=150)) -> None:
+             timeout: int = typer.Option(30, min=10, max=150)) -> None:
     data = _run(ContentService().map(_url(url), instructions, max_depth, max_breadth, limit, timeout))
     _emit("map", data, quiet_value=data.get("results"))
 

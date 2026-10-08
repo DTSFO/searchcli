@@ -58,7 +58,7 @@ class TavilyProvider:
             raise
 
     async def map(self, url: str, instructions: str, max_depth: int, max_breadth: int,
-                  limit: int, timeout: int) -> dict:
+                  limit: int, timeout: int = 30) -> dict:
         body: dict = {"url": url, "max_depth": max_depth, "max_breadth": max_breadth,
                       "limit": limit, "timeout": timeout}
         if instructions:
